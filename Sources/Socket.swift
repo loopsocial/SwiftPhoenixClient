@@ -43,6 +43,10 @@ public class Socket: WebSocketDelegate {
         reconnect()
     }
 
+    deinit {
+        close()
+    }
+
     /**
      Closes socket connection
      - parameter callback: Function to run after close
