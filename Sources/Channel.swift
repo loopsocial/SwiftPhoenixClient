@@ -40,8 +40,8 @@ public class Channel {
      - parameter event:    String event name
      - parameter callback: Function to run on event
      */
-    public func on(event: String, callback: @escaping ((Any) -> Void)) {
-        bindings.append(Binding(event: event, callback: { callback($0) }))
+    public func on(event: String, callback: @escaping (Message) -> ()) {
+        bindings.append(Binding(event: event, callback: callback))
     }
 
     /**

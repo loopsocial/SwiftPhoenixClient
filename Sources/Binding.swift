@@ -5,9 +5,9 @@
 
 import Swift
 
-class Binding {
-    var event: String
-    var callback: (Any) -> Void?
+final class Binding {
+    let event: String
+    let callback: (Message) -> ()
 
     /**
      Initializes an object for handling event/callback bindings
@@ -16,8 +16,9 @@ class Binding {
      - returns: Tuple containing event and callback function
      */
     @discardableResult
-    init(event: String, callback: @escaping (Any) -> Void?) {
-        (self.event, self.callback) = (event, callback)
+    init(event: String, callback: @escaping (Message) -> ()) {
+        self.event = event
+        self.callback = callback
         create()
     }
 
@@ -26,7 +27,7 @@ class Binding {
      - returns: Tuple containing event and callback function
      */
     @discardableResult
-    func create() -> (String, (Any) -> Void?) {
+    func create() -> (String, (Message) -> ()) {
         return (event, callback)
     }
 }
