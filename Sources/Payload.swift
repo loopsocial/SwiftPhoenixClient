@@ -6,9 +6,9 @@
 import Swift
 
 public class Payload {
-    var topic: String
-    var event: String
-    var message: Message
+    let topic: String
+    let event: String
+    let message: Message
 
     /**
      Initializes a formatted Payload

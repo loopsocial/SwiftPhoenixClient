@@ -12,51 +12,43 @@ Supported objects:
 
 import Foundation
 
-public class Serializable : NSObject{
+public class Serializable : NSObject {
 
-    func toDictionary() -> NSDictionary {
+    func toDictionary() -> [String: Any] {
         let aClass : AnyClass? = type(of: self)
         var propertiesCount : CUnsignedInt = 0
         let propertiesInAClass : UnsafeMutablePointer<objc_property_t?>! = class_copyPropertyList(aClass, &propertiesCount)
-        let propertiesDictionary : NSMutableDictionary = NSMutableDictionary()
+        var propertiesDictionary = [String: Any]()
 
         for i in 0 ..< Int(propertiesCount) {
             let property = propertiesInAClass[i]
-            let propName = NSString(cString: property_getName(property), encoding: String.Encoding.utf8.rawValue)
-            let propValue : Any! = self.value(forKey: propName! as String) as Any!;
+            let propName = String(cString: property_getName(property))
+            let propValue = value(forKey: propName)
 
-            if propValue is Serializable {
-                propertiesDictionary.setValue((propValue as! Serializable).toDictionary(), forKey: (propName as! String))
-            } else if propValue is Array<Serializable> {
-                var subArray = Array<NSDictionary>()
-                for item in (propValue as! Array<Serializable>) {
-                    subArray.append(item.toDictionary())
-                }
-                propertiesDictionary.setValue(subArray, forKey: propName! as String)
-            } else if propValue is NSData {
-                propertiesDictionary.setValue((propValue as! NSData).base64EncodedString(options: []), forKey: propName! as String)
-            } else if propValue is Bool {
-                propertiesDictionary.setValue([propValue as! Bool], forKey: propName! as String)
-            } else if propValue is NSDate {
-                let date = propValue as! NSDate
-                let dateFormatter = DateFormatter()
-                dateFormatter.dateFormat = "Z"
-                let dateString = NSString(format: "/Date(%.0f000%@)/", date.timeIntervalSince1970, dateFormatter.string(from: date as Date))
-                propertiesDictionary.setValue(dateString, forKey: propName! as String)
+            if let propValue = propValue as? Serializable {
+                propertiesDictionary[propName] = propValue.toDictionary()
+            } else if let propValue = propValue as? [Serializable] {
+                propertiesDictionary[propName] = propValue.map { $0.toDictionary() }
+            } else if let propValue = propValue as? Data {
+                propertiesDictionary[propName] = propValue.base64EncodedString(options: [])
+            } else if let propValue = propValue as? Bool {
+                propertiesDictionary[propName] = [propValue]
+            } else if let propValue = propValue as? Date {
+                propertiesDictionary[propName] = propValue.string
             } else {
-                propertiesDictionary.setValue(propValue, forKey: propName! as String)
+                propertiesDictionary[propName] = propValue
             }
         }
 
         return propertiesDictionary
     }
 
-    func toJson() -> NSData! {
+    func toJson() -> Data {
         let dictionary = self.toDictionary()
         do {
-            return try JSONSerialization.data(withJSONObject: dictionary, options:JSONSerialization.WritingOptions(rawValue: 0)) as NSData!
+            return try JSONSerialization.data(withJSONObject: dictionary, options:JSONSerialization.WritingOptions(rawValue: 0))
         } catch _ {
-            return nil
+            return Data()
         }
     }
 
@@ -65,4 +57,16 @@ public class Serializable : NSObject{
     }
     
     override init() { }
+}
+
+fileprivate extension Date {
+    private static let dateFormatter: DateFormatter = {
+        let df = DateFormatter()
+        df.dateFormat = "Z"
+        return df
+    }()
+
+    var string: String {
+        return NSString(format: "/Date(%.0f000%@)/", timeIntervalSince1970, Date.dateFormatter.string(from: self)) as String
+    }
 }

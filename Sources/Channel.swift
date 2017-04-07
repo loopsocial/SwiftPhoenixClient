@@ -7,9 +7,9 @@ import Swift
 
 public class Channel {
     var bindings: [Binding] = []
-    var topic: String?
-    var message: Message?
-    var callback: ((Any) -> Void?)
+    let topic: String
+    let message: Message
+    let callback: (Channel) -> ()
     weak var socket: Socket?
 
     /**
@@ -20,8 +20,11 @@ public class Channel {
      - parameter socket:   Socket for websocket connection
      - returns: Channel
      */
-    init(topic: String, message: Message, callback: @escaping ((Any) -> Void), socket: Socket) {
-        (self.topic, self.message, self.callback, self.socket) = (topic, message, { callback($0) }, socket)
+    init(topic: String, message: Message, callback: @escaping (Channel) -> (), socket: Socket) {
+        self.topic = topic
+        self.message = message
+        self.callback = callback
+        self.socket = socket
         reset()
     }
 
@@ -84,7 +87,7 @@ public class Channel {
      */
     func send(event: String, message: Message) {
         print("conn sending")
-        let payload = Payload(topic: topic!, event: event, message: message)
+        let payload = Payload(topic: topic, event: event, message: message)
         socket?.send(data: payload)
     }
 
@@ -94,7 +97,7 @@ public class Channel {
      */
     func leave(message: Message) {
         if let sock = socket {
-            sock.leave(topic: topic!, message: message)
+            sock.leave(topic: topic, message: message)
         }
         reset()
     }

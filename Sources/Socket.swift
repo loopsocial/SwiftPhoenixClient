@@ -82,7 +82,7 @@ public class Socket: WebSocketDelegate {
      Heartbeat payload (Message) to send with each pulse
      */
     @objc func heartbeat() {
-        let message = Message(message: ["body": "Pong"] as Any)
+        let message = Message(message: ["body": "Pong"])
         let payload = Payload(topic: "phoenix", event: "heartbeat", message: message)
         send(data: payload)
     }
@@ -92,7 +92,7 @@ public class Socket: WebSocketDelegate {
      */
     @objc public func reconnect() {
         close() {
-            self.conn = WebSocket(url: NSURL(string: self.endPoint!)! as URL)
+            self.conn = WebSocket(url: URL(string: self.endPoint!)!)
             if let connection = self.conn {
                 connection.delegate = self
                 connection.connect()
@@ -134,7 +134,7 @@ public class Socket: WebSocketDelegate {
     func onError(error: NSError) {
         print("Error: \(error)")
         for chan in channels {
-            let msg = Message(message: ["body": error.localizedDescription] as Any)
+            let msg = Message(message: ["body": error.localizedDescription])
             chan.trigger(triggerEvent: "error", msg: msg)
         }
     }
@@ -157,7 +157,7 @@ public class Socket: WebSocketDelegate {
      */
     func rejoinAll() {
         for chan in channels {
-            rejoin(chan: chan as Channel)
+            rejoin(chan: chan)
         }
     }
 
@@ -167,11 +167,9 @@ public class Socket: WebSocketDelegate {
      */
     func rejoin(chan: Channel) {
         chan.reset()
-        if let topic = chan.topic, let joinMessage = chan.message {
-            let payload = Payload(topic: topic, event: "phx_join", message: joinMessage)
-            send(data: payload)
-            chan.callback(chan)
-        }
+        let payload = Payload(topic: chan.topic, event: "phx_join", message: chan.message)
+        send(data: payload)
+        chan.callback(chan)
     }
 
     /**
@@ -180,7 +178,7 @@ public class Socket: WebSocketDelegate {
      - parameter message:  Message payload
      - parameter callback: Function to trigger after join
      */
-    public func join(topic: String, message: Message, callback: @escaping ((Any) -> Void)) {
+    public func join(topic: String, message: Message, callback: @escaping (Channel) -> ()) {
         let chan = Channel(topic: topic, message: message, callback: callback, socket: self)
         channels.append(chan)
         if isConnected() {
@@ -195,7 +193,7 @@ public class Socket: WebSocketDelegate {
      - parameter message: Message payload
      */
     public func leave(topic: String, message: Message) {
-        let leavingMessage = Message(subject: "status", body: "leaving" as Any)
+        let leavingMessage = Message(subject: "status", body: "leaving")
         let payload = Payload(topic: topic, event: "phx_leave", message: leavingMessage)
         send(data: payload)
         var newChannels: [Channel] = []
@@ -213,14 +211,13 @@ public class Socket: WebSocketDelegate {
      - parameter data: Payload
      */
     public func send(data: Payload) {
-        let callback = {
-            (payload: Payload) -> Void in
-            if let connection = self.conn {
-                let json = self.payloadToJson(payload: payload)
-                print("json: \(json)")
-                connection.write(string: json)
-            }
+        let callback: (Payload) -> () = { payload in
+            guard let connection = self.conn else { return }
+            let json = self.payloadToJson(payload: payload)
+            print("json: \(json)")
+            connection.write(string: json)
         }
+
         if isConnected() {
             callback(data)
         } else {
@@ -232,13 +229,13 @@ public class Socket: WebSocketDelegate {
      Flush message buffer
      */
     @objc func flushSendBuffer() {
-        if isConnected() && sendBuffer.count > 0 {
-            for callback in sendBuffer {
-                callback
-            }
-            sendBuffer = []
-            resetBufferTimer()
+        guard isConnected(), !sendBuffer.isEmpty else { return }
+
+        for callback in sendBuffer {
+            callback
         }
+        sendBuffer = []
+        resetBufferTimer()
     }
 
     /**
@@ -259,15 +256,15 @@ public class Socket: WebSocketDelegate {
     public func websocketDidReceiveMessage(socket: WebSocket, text: String) {
         print("socket message: \(text)")
 
-        guard let data = text.data(using: String.Encoding.utf8),
-            let json = try? JSONSerialization.jsonObject(with: data, options: []),
-            let jsonObject = json as? [String: AnyObject] else {
+        guard let data = text.data(using: String.Encoding.utf8)
+            , let json = (try? JSONSerialization.jsonObject(with: data, options: [])) as? [String: Any] else {
                 print("Unable to parse JSON: \(text)")
                 return
         }
 
-        guard let topic = jsonObject["topic"] as? String, let event = jsonObject["event"] as? String,
-            let msg = jsonObject["payload"] as? [String: AnyObject] else {
+        guard let topic = json["topic"] as? String
+            , let event = json["event"] as? String
+            , let msg = json["payload"] as? [String: Any] else {
                 print("No phoenix message: \(text)")
                 return
         }
@@ -282,8 +279,8 @@ public class Socket: WebSocketDelegate {
 
     public func websocketDidDisconnect(socket: WebSocket, error: NSError?) {
         if let err = error { onError(error: err) }
-        print("socket closed: \(error?.localizedDescription)")
-        onClose(event: "reason: \(error?.localizedDescription)")
+        print("socket closed: \(String(describing: error?.localizedDescription))")
+        onClose(event: "reason: \(String(describing: error?.localizedDescription))")
     }
 
     public func websocketDidConnect(socket: WebSocket) {
@@ -296,11 +293,7 @@ public class Socket: WebSocketDelegate {
     }
 
     func unwrappedJsonString(string: String?) -> String {
-        if let stringVal = string {
-            return stringVal
-        } else {
-            return ""
-        }
+        return string ?? ""
     }
 
     func makeRef() -> UInt64 {
@@ -323,10 +316,8 @@ public class Socket: WebSocketDelegate {
             json["payload"] = payload.message.toDictionary()
         }
 
-        guard let jsonData = try? JSONSerialization.data(withJSONObject: json, options: []),
-            let jsonString = String(data: jsonData, encoding: String.Encoding.utf8) else {
-                return ""
-        }
+        guard let jsonData = try? JSONSerialization.data(withJSONObject: json, options: [])
+            , let jsonString = String(data: jsonData, encoding: String.Encoding.utf8) else { return "" }
 
         return jsonString
     }

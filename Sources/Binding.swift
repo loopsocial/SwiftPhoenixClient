@@ -25,6 +25,7 @@ class Binding {
      Creates a Binding object holding event/callback details
      - returns: Tuple containing event and callback function
      */
+    @discardableResult
     func create() -> (String, (Any) -> Void?) {
         return (event, callback)
     }

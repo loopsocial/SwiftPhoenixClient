@@ -38,6 +38,7 @@ public class Message: Serializable {
      - parameter single: Boolean indicating if the message is a single key or not
      - returns: Message
      */
+    @discardableResult
     func create(single: Bool = true) -> [String: Any] {
         if single {
             return [self.subject!: self.body! as Any]
