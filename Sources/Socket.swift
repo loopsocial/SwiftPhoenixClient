@@ -7,6 +7,12 @@ import Swift
 import Starscream
 import Foundation
 
+public protocol SocketDelegate: class {
+    func socketDidOpen(_ socket: Socket)
+    func socketDidClose(_ socket: Socket)
+    func socketDidError(_ socket: Socket, error: Error)
+}
+
 public class Socket: WebSocketDelegate {
     var conn: WebSocket?
     var endPoint: String?
@@ -23,6 +29,16 @@ public class Socket: WebSocketDelegate {
     let heartbeatDelay = 30.0
 
     var messageReference: UInt64 = UInt64.min // 0 (max: 18,446,744,073,709,551,615)
+
+    public weak var delegate: SocketDelegate?
+
+    /**
+     Indicates if connection is established
+     - returns: Bool
+     */
+    public var isConnected: Bool {
+        return conn?.isConnected ?? false
+    }
 
     /**
      Initializes a Socket connection
@@ -117,6 +133,7 @@ public class Socket: WebSocketDelegate {
      Kills reconnect timer and joins all open channels
      */
     func onOpen() {
+        delegate?.socketDidOpen(self)
         reconnectTimer.invalidate()
         startHeartbeatTimer()
         rejoinAll()
@@ -127,6 +144,7 @@ public class Socket: WebSocketDelegate {
      - parameter event: String event name
      */
     func onClose(event: String) {
+        delegate?.socketDidClose(self)
         reconnectTimer.invalidate()
         reconnectTimer = Timer.scheduledTimer(timeInterval: reconnectAfterMs, target: self, selector: #selector(reconnect), userInfo: nil, repeats: true)
     }
@@ -137,23 +155,11 @@ public class Socket: WebSocketDelegate {
      */
     func onError(error: NSError) {
         print("Error: \(error)")
+        delegate?.socketDidError(self, error: error)
         for chan in channels {
             let msg = Message(message: ["body": error.localizedDescription])
             chan.trigger(triggerEvent: "error", msg: msg)
         }
-    }
-
-    /**
-     Indicates if connection is established
-     - returns: Bool
-     */
-    func isConnected() -> Bool {
-        if let connection = self.conn {
-            return connection.isConnected
-        } else {
-            return false
-        }
-
     }
 
     /**
@@ -185,7 +191,7 @@ public class Socket: WebSocketDelegate {
     public func join(topic: String, message: Message, callback: @escaping (Channel) -> ()) {
         let chan = Channel(topic: topic, message: message, callback: callback, socket: self)
         channels.append(chan)
-        if isConnected() {
+        if isConnected {
             print("joining")
             rejoin(chan: chan)
         }
@@ -201,10 +207,9 @@ public class Socket: WebSocketDelegate {
         let payload = Payload(topic: topic, event: "phx_leave", message: leavingMessage)
         send(data: payload)
         var newChannels: [Channel] = []
-        for chan in channels {
-            let c = chan as Channel
-            if !c.isMember(topic: topic) {
-                newChannels.append(c)
+        for channel in channels {
+            if !channel.isMember(topic: topic) {
+                newChannels.append(channel)
             }
         }
         channels = newChannels
@@ -222,7 +227,7 @@ public class Socket: WebSocketDelegate {
             connection.write(string: json)
         }
 
-        if isConnected() {
+        if isConnected {
             callback(data)
         } else {
             sendBuffer.append(callback(data))
@@ -233,7 +238,7 @@ public class Socket: WebSocketDelegate {
      Flush message buffer
      */
     @objc func flushSendBuffer() {
-        guard isConnected(), !sendBuffer.isEmpty else { return }
+        guard isConnected, !sendBuffer.isEmpty else { return }
 
         for callback in sendBuffer {
             callback
