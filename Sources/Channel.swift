@@ -7,7 +7,7 @@ import Swift
 
 public class Channel {
     var bindings: [Binding] = []
-    let topic: String
+    public let topic: String
     let message: Message
     let callback: (Channel) -> ()
     weak var socket: Socket?
@@ -95,7 +95,7 @@ public class Channel {
      Leaves the socket
      - parameter message: Message to pass to the Socket#leave function
      */
-    func leave(message: Message) {
+    public func leave(message: Message) {
         if let sock = socket {
             sock.leave(topic: topic, message: message)
         }
